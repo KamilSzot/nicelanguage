@@ -1,0 +1,17 @@
+{
+  "name": "nicelanguage",
+  "version": "1.0.0",
+  "description": "",
+  "main": "test.meta.coffee",
+  "dependencies": {
+    "metacoffee": "^0.4.0"
+  },
+  "devDependencies": {
+    "metacoffee": "^0.4.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
