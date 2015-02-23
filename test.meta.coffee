@@ -1,53 +1,8 @@
 { runtime: {OMeta, subclass} } = require 'metacoffee'
 util = require 'util'
+colors = require 'colors'
 
-
-ometa MultiplicativeInterpreter
-  expr     = mulExpr:x "+" mulExpr:y  -> x + y
-           | mulExpr:x "-" mulExpr:y  -> x - y
-           | mulExpr:x                -> x
-  mulExpr  = mulExpr:x "*" primExpr:y -> x * y
-           | mulExpr:x "/" primExpr:y -> x / y
-           | primExpr
-  primExpr = "(" expr:x ")"           -> x
-           | number
-  number   = "" digit:d               -> valueOfDigit d
-           | "-" digit:d              -> -valueOfDigit d
-
-valueOfDigit = (digit) ->
-  +digit
-
-# console.log MultiplicativeInterpreter.matchAll '5-2+2', 'expr'
-# console.log MultiplicativeInterpreter.matchAll '2-2', 'expr'
-# console.log MultiplicativeInterpreter.matchAll '((7 * 8) / (8 / 6)) - (4+5)', 'expr'
-
-ometa LISPInterpreter
-  expr    = list
-          | apply
-          | literal
-          | symbol
-  list    = "" "'(" expr*:els ")"          -> els
-  apply   = "" "(" expr+:els ")"           -> els[0].apply(@, els[1..])
-  atom    = "" (letter | '_' | '-'):first ( letter | digit | '-' | '_' )*:rest -> first + rest.join('')
-  literal = "" "'" atom
-  symbol  = atom:name  -> env[name]
-
-env =
-  l: (args...) -> args
-#  def: (name, value) -> env[name] = value
-  do: (args..., last) -> last
-  c: -> 5
-  n: 100
-# console.log LISPInterpreter.matchAll "
-# (do
-#   (def 'b 'rest)
-#   (def 'a 'test)
-#   b
-# )", 'expr'
-
-l = (s, o) ->
-  console.log('-----------')
-  console.log(s)
+l = (o) ->
   console.log(o)
   o
 
@@ -57,51 +12,117 @@ Object.assign = (object, sources...) ->
       object[key] = val
     object
 
-ometa NiceParser
-  wholeProgram = program:p end -> p
-  expr        = "" (rassoc | ter ):e          -> ['e', e]
-  program     = "" listOf("expr", ";"):statements                               -> ['program', statements]
-  block       = "" '{' "" program:p "" '}'                                      -> ['block', p]
-  ter         = literal | block | plusExp | lookup | def
-  rassoc      = (rassoc | ter):e "." identifier:id -> ['.'+id, e]
-              | (rassoc | ter):fn "" '(' listOf("expr", ','):args ')'  -> ['call', args, fn]
-  def         = "def" "" identifier:name "" args?:args "" block:body            -> ['def', name, args, body]
-  identifier  = (letter | '_' | '-'):first ( letter | digit | '-' | '_' )*:rest -> ':'+first+rest.join ''
-  args        = "(" listOf("identifier", ","):args ")"                          -> ['args', args]
-  lookup      = identifier:name                                                 -> ['lookup', name]
-  literal     = "'" (!"'" anything)*:chars "'"                                  -> ['literal', chars.join '']
-  plusExp     = expr:x "" "+" "" expr:y                                         -> '+'
 
-ometa NiceCompiler
-  wholeProgram = program end
-  statement   = call | expr
+# ometa NiceParser
+#   wholeProgram = program:p end -> p
+#   expr        = "" (rassoc | ter ):e          -> ['e', e]
+#   program     = "" listOf("expr", ";"):statements                               -> ['program', statements]
+#   block       = "" '{' "" program:p "" '}'                                      -> ['block', p]
+#   ter         = literal | block | plusExp | lookup | def
+#   rassoc      = (rassoc | ter):e "." identifier:id -> ['.'+id, e]
+#               | (rassoc | ter):fn "" '(' listOf("expr", ','):args ')'  -> ['call', args, fn]
+#   def         = "def" "" identifier:name "" args?:args "" block:body            -> ['def', name, args, body]
+#   identifier  = (letter | '_' | '-'):first ( letter | digit | '-' | '_' )*:rest -> ':'+first+rest.join ''
+#   args        = "(" listOf("identifier", ","):args ")"                          -> ['args', args]
+#   lookup      = identifier:name                                                 -> ['lookup', name]
+#   literal     = "'" (!"'" anything)*:chars "'"                                  -> ['literal', chars.join '']
+#   plusExp     = expr:x "" "+" "" expr:y                                         -> '+'
 
-  expr        = "" (call | def | literal | block | plusExp | lookup )
-  program     = "" listOf("statement", ";"):statements                               -> (scope) -> statements.reduce ((_, fn) -> fn(scope)), null
-  block       = "" '{' "" program:p "" '}'                                      -> (scope, args = []) ->
-                                                                                      (actualArgs...) ->
-                                                                                        scopeChild = Object.create(scope);
-                                                                                        for name, position in args
-                                                                                          scopeChild[name] = actualArgs[position]
-                                                                                        p(scopeChild)
-  def         = "def" "" identifier:name "" args?:args "" block:body            -> (scope) -> scope[name] = body(scope, args)
-  call        = (call | block | lookup):fn "" '(' listOf("expr", ','):args ')'  -> (scope) -> fn(scope).apply(null, args.map (fn) -> fn(scope))
-  identifier  = (letter | '_' | '-'):first ( letter | digit | '-' | '_' )*:rest -> [first].concat(rest).join('')
-  args        = "(" listOf("identifier", ","):args ")"                          -> args
-  lookup      = "" identifier:name ""                                           -> (scope) -> scope[name]
-  literal     = "'" (!"'" anything)*:chars "'"                                  -> (scope) -> chars.join ''
-  plusExp     = expr:x "" "+" "" expr:y                                         -> (scope) -> "" + x(scope) + y(scope)
+class Parser
+  program: (statements) -> {program: statements }
+  block: (program) -> {block: program}
+  def: (name, args, body) -> {def:{name: name, args: args, body: body}}
+  call: (fn, args) -> {call: args, fn: fn }
+  identifier: (str) -> str
+  args: (args) -> args.join(', ')
+  lookup: (name) -> name
+  literal: (str) -> '"'+str+'"'
+  plusExp: (x,y) -> {plus:[x,y]}
+  partialApplication: (fn, args) -> {partialApplication: args, fn: fn}
+  lazyApplication: (fn, args) -> {lazyApplication: args, fn: fn}
 
-program = "
-  'a'.a().b.c().dads.e.f
+
+class Compiler
+  program: (statements) -> (scope) -> statements.reduce ((_, fn) -> fn(scope)), null
+  block: (program) -> (scope, args = []) ->
+           (actualArgs...) ->
+             scopeChild = Object.create(scope);
+             for name, position in args
+               scopeChild[name] = actualArgs[position]
+             program(scopeChild)
+  def: (name, args, body) -> (scope) -> scope[name] = body(scope, args)
+  call:               (fn, args) -> (scope) -> fn(scope).apply(null, args.map (fn) -> fn(scope))
+  lazyApplication:    (fn, args) -> (scope) -> fn(scope).apply(null, args.map (fn) -> fn.bind(null, scope))
+  partialApplication: (fn, args) -> (scope) -> Function::bind.apply(fn(scope), [null].concat args.map (fn) -> fn(scope))
+  identifier: (str) -> str
+  args: (args) -> args
+  lookup: (name) -> (scope) -> scope[name]
+  literal: (str) -> (scope) -> str
+  plusExp: (x,y) -> (scope) -> "" + (x(scope) + y(scope))
+
+nice = (A) ->
+  ometa NiceCompiler
+    program     = statements:statements end                                       -> statements
+    statement   = ';'* expr:e                                                     -> e
+    statements  = "" statement+:statements ';'*                                   -> A.program statements
+
+    block       = "" '{' "" statements:statements "" '}'                          -> A.block statements
+
+    def         = "def" "" identifier:name "" args?:args "" block:body            -> A.def name, args, body
+
+    identifier  = (letter | '_' | '-'):first ( letter | digit | '-' | '_' )*:rest -> A.identifier [first].concat(rest).join('')
+    args        = "(" listOf("identifier", ","):args ")"                          -> A.args args
+
+    literal     = "" (number | string):value ""                                   -> A.literal value
+    number      = (digit+):number                                                 -> +number
+    string      = "'" (!"'" anything)*:chars "'"                                  -> chars.join('')
+
+    lookup      = "" identifier:name ""                                           -> A.lookup name
+
+    lazyExpr    = '^' expr
+
+
+    expr        = leftrec | others
+    others      = def | literal | block | lookup
+    leftrec     = (leftrec | others):fn "" '(' listOf("expr", ','):args ')'       -> A.call fn, args
+                | (leftrec | others):fn "" "^(" listOf("expr", ','):args ')'      -> A.lazyApplication fn, args
+                | (leftrec | others):fn "" '<' listOf("expr", ','):args '>'       -> A.partialApplication fn, args
+                | (leftrec | others):x "" "+" "" expr:y                           -> A.plusExp x, y
+
+  NiceCompiler
+
+
+
+
+program = ";;;
+  def a(x) { x };
+  def b(y) { y };
+  def q { a<'g'> };
+  q()()+b('h');
+  1 + 2;
+  3;
+
+  if^(1, t(), e())
+
 "
 
+env = {
+  c: -> 1,
+  t: -> l "t called"; 1
+  e: -> l "e called"; 0
+  'if': (cond, whenTrue, whenFalse) -> if(cond()) then whenTrue() else whenFalse()
+}
+
+
 error = (m, idx) ->
-  console.log(m.input.lst[0..idx] + "<<^^^ " + m.input.lst[idx..])
+  console.log(m.input.lst[0..idx] + "<<^^^ ".red + m.input.lst[idx+1..])
 
-console.log util.inspect (NiceParser.matchAll program, 'wholeProgram', [], error), false, 10
+# console.log util.inspect (NiceParser.matchAll program, 'wholeProgram', [], error), false, 20
 
-# console.log util.inspect (NiceCompiler.matchAll program, 'program')(env), false, 10
+compiled = nice(new Compiler).matchAll(program, 'program', [], error)
+console.log util.inspect compiled, false, 15
+if typeof compiled == 'function'
+  console.log util.inspect compiled(env), false, 15
 
 
 
