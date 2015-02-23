@@ -89,7 +89,6 @@ nice = (A) ->
                 | (leftrec | others):fn "" '<' listOf("expr", ','):args '>'       -> A.partialApplication fn, args
                 | (leftrec | others):x "" "+" "" expr:y                           -> A.plusExp x, y
 
-  NiceCompiler
 
 
 
