@@ -1,4 +1,7 @@
 { runtime: {OMeta, subclass} } = require 'metacoffee'
+
+{ SourceMapGenerator, SourceMapConsumer, SourceNode } = require 'source-map'
+
 util = require 'util'
 colors = require 'colors'
 
@@ -58,52 +61,53 @@ class Compiler
   args: (args) -> args
   lookup: (name) -> (scope) -> scope[name]
   literal: (str) -> (scope) -> str
-  plusExp: (x,y) -> (scope) -> "" + (x(scope) + y(scope))
+  plusExp: (x,y) -> (scope) -> x(scope) + y(scope)
 
 nice = (A) ->
   ometa NiceCompiler
     program     = statements:statements end                                       -> statements
-    statement   = ';'* expr:e                                                     -> e
-    statements  = "" statement+:statements ';'*                                   -> A.program statements
 
-    block       = "" '{' "" statements:statements "" '}'                          -> A.block statements
+    statements  = listOf("expr", ";"):statements ";"?                             -> A.program statements
 
-    def         = "def" "" identifier:name "" args?:args "" block:body            -> A.def name, args, body
+    block       = '{' statements:statements '}'                                   -> A.block statements
+
+    def         = "def" space+ identifier:name space* args?:args space* block:body-> console.log(util.inspect @input.lst.substr(at[0], at[1]-at[0])); A.def name, args, body
 
     identifier  = (letter | '_' | '-'):first ( letter | digit | '-' | '_' )*:rest -> A.identifier [first].concat(rest).join('')
     args        = "(" listOf("identifier", ","):args ")"                          -> A.args args
 
-    literal     = "" (number | string):value ""                                   -> A.literal value
-    number      = (digit+):number                                                 -> +number
-    string      = "'" (!"'" anything)*:chars "'"                                  -> chars.join('')
+    literal     = "" (numeric | quoted):value ""                                   -> A.literal value
+    numeric     = <digit+:whole (".":sep digit+:decim)?>:n -> +n
+    quoted      = "'" <(!"'" anything)*>:str "'"                                  -> str
 
     lookup      = "" identifier:name ""                                           -> A.lookup name
 
     lazyExpr    = '^' expr
 
 
-    expr        = leftrec | others
+    expr        = space* (leftrec | others):e space*  -> e
     others      = def | literal | block | lookup
-    leftrec     = (leftrec | others):fn "" '(' listOf("expr", ','):args ')'       -> A.call fn, args
-                | (leftrec | others):fn "" "^(" listOf("expr", ','):args ')'      -> A.lazyApplication fn, args
-                | (leftrec | others):fn "" '<' listOf("expr", ','):args '>'       -> A.partialApplication fn, args
-                | (leftrec | others):x "" "+" "" expr:y                           -> A.plusExp x, y
+    leftrec     = (leftrec | others):fn '(' listOf("expr", ','):args ')'       -> A.call fn, args
+                | (leftrec | others):fn "^(" listOf("expr", ','):args ')'      -> A.lazyApplication fn, args
+                | (leftrec | others):fn '<' listOf("expr", ','):args '>'       -> A.partialApplication fn, args
+                | (leftrec | others):x "+" expr:y                           -> A.plusExp x, y
 
-
-
-
-
-program = ";;;
+program = "
   def a(x) { x };
-  def b(y) { y };
-  def q { a<'g'> };
-  q()()+b('h');
-  1 + 2;
-  3;
-
-  if^(1, t(), e())
-
+  def q(o) { def e(x) { x+1 }; 123 + e(9) };
+  q<'a'>();
+  def c(m) { m()+1+3 }^(2)
 "
+  # def q { a^(1) }
+#   q()()+b('h');
+#   1 + 2;
+#   3;
+#
+#   if^(1, t(), e());
+#
+#   a(3)+a(2+2);
+#   3
+# "
 
 env = {
   c: -> 1,
@@ -117,8 +121,9 @@ error = (m, idx) ->
   console.log(m.input.lst[0..idx] + "<<^^^ ".red + m.input.lst[idx+1..])
 
 # console.log util.inspect (NiceParser.matchAll program, 'wholeProgram', [], error), false, 20
+comp = nice(new Compiler)
 
-compiled = nice(new Compiler).matchAll(program, 'program', [], error)
+compiled = comp.matchAll(program, 'program', [], error)
 console.log util.inspect compiled, false, 15
 if typeof compiled == 'function'
   console.log util.inspect compiled(env), false, 15
