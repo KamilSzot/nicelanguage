@@ -67,7 +67,8 @@ nice = (A) ->
   ometa NiceCompiler
     program     = statements:statements end                                       -> statements
 
-    statements  = listOf("expr", ";"):statements ";"?                             -> A.program statements
+    statements  = listOf("spacedExpression", ";"):statements ";"?                             -> A.program statements
+    spacedExpression = space* expr:e space*  -> e
 
     block       = '{' statements:statements '}'                                   -> A.block statements
 
@@ -80,23 +81,18 @@ nice = (A) ->
     numeric     = <digit+:whole (".":sep digit+:decim)?>:n -> +n
     quoted      = "'" <(!"'" anything)*>:str "'"                                  -> str
 
-    lookup      = "" identifier:name ""                                           -> A.lookup name
+    lookup      = "" identifier:name ""                                         -> A.lookup name
 
-    lazyExpr    = '^' expr
-
-
-    expr        = space* (leftrec | others):e space*  -> e
-    others      = def | literal | block | lookup
-    leftrec     = (leftrec | others):fn '(' listOf("expr", ','):args ')'       -> A.call fn, args
-                | (leftrec | others):fn "^(" listOf("expr", ','):args ')'      -> A.lazyApplication fn, args
-                | (leftrec | others):fn '<' listOf("expr", ','):args '>'       -> A.partialApplication fn, args
-                | (leftrec | others):x "+" expr:y                           -> A.plusExp x, y
-
+    expr        = expr:fn '(' listOf("spacedExpression", ','):args ')'                      -> A.call fn, args
+                | expr:fn "^(" listOf("spacedExpression", ','):args ')'                     -> A.lazyApplication fn, args
+                | expr:fn '<' listOf("spacedExpression", ','):args '>'                      -> A.partialApplication fn, args
+                | expr:x "+" expr:y                                             -> A.plusExp x, y
+                | (def | literal | block | lookup):e                            -> e
 program = "
   def a(x) { x };
   def q(o) { def e(x) { x+1 }; 123 + e(9) };
   q<'a'>();
-  def c(m) { m()+1+3 }^(2)
+  def c(m) { m()+1+3 }^(2);
 "
   # def q { a^(1) }
 #   q()()+b('h');

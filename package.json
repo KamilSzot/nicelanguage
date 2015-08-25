@@ -4,15 +4,13 @@
   "description": "",
   "main": "test.meta.coffee",
   "dependencies": {
-    "metacoffee": "^0.4.0",
-    "shelljs": "^0.5.3"
+    "metacoffee": "git+ssh://git@github.com/KamilSzot/meta-coffee.git#hex-digit-parsing-fix"
   },
   "devDependencies": {
     "coffee-script": "^1.9.1",
     "colors": "^1.0.3",
     "esprima": "^2.0.0",
     "gulp": "^3.9.0",
-    "metacoffee": "^0.4.0",
     "shelljs": "^0.5.3",
     "source-map": "^0.4.4"
   },
