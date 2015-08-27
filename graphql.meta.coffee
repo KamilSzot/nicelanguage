@@ -26,9 +26,9 @@ ometa graphql
                       | Comment
                       | Comma
   Punctuator          = Ignored* ("!" | "$" | "(" | ")" | "..." | ":" | "=" | "@" | "[" | "]" | "{" | "}") Ignored*
-  Name                = Ignored* {l "<"} letter+:e Ignored*
-  Document            = (Definition+ | QueryShorthand) end
-  Definition          = (OperationDefinition | FragmentDefinition)
+  Name                = Ignored* <(letter | "_") (letter | digit | "_")*>:n Ignored* -> n
+  Document            = (Definition+ | QueryShorthand):e end -> e
+  Definition          = (OperationDefinition | FragmentDefinition):e -> e
   OperationDefinition = OperationType Name VariableDefinitions? Directives? SelectionSet
                       | SelectionSet
   OperationType       = "query" | "mutation"
@@ -42,8 +42,8 @@ ometa graphql
   Argument            = Name ":" Value
   Alias               = Name ":"
   FragmentSpread      = "..." FragmentName Directives?
-  FragmentDefinition  = {l "f"} "fragment" FragmentName "on" TypeCondition Directives? SelectionSet
-  FragmentName        = {l "fn"} !"on" Name
+  FragmentDefinition  = "fragment" FragmentName:n "on" TypeCondition Directives? SelectionSet -> n
+  FragmentName        = !"on" Name
   TypeCondition       = NamedType
   InlineFragment      = "..." space+ "on" TypeCondition Directives? SelectionSet
   Value               = !"Const" Variable
@@ -68,8 +68,7 @@ ometa graphql
   ExponentIndicator   = "e" | "E"
   Sign                = "-" | "+"
   BooleanValue        = "true" | "false"
-  StringValue         = Ignored* ('""'
-                      | '"' StringCharacter+ '"') Ignored*
+  StringValue         = Ignored* ('""' | '"' <StringCharacter+>:s '"') Ignored* -> s ? ""
   StringCharacter     = !'"' !'\n' !'\\' SourceCharacter
                       | '\\' EscapedUnicode
                       | '\\' EscapedCharacter
@@ -98,9 +97,9 @@ ometa graphql
 
 # TODO: no regexps
 
-ometa tok
-  word = <letter+>:e space* -> e
-  doc = word+:w anything* end -> w
+# ometa tok
+#   word = <letter+>:e space* -> e
+#   doc = word+:w anything* end -> w
 
 
 code = """
@@ -109,7 +108,18 @@ fragment maybeFragment on Query {
     name
   }
 }"""
-
+# for n of graphql.prototype
+#   if graphql.prototype.hasOwnProperty(n) && n != 'constructor' && n != 'initialize'
+#     do (f = graphql.prototype[n], n = n) -> 
+#       graphql.prototype[n] = (args...) -> 
+#         ol = @.input.idx
+#         res = f.call(@, args...)
+#         ne = @.input.idx
+#         if ne != ol
+#           l n
+#         res
+        
+      
 #comp = createCompiler()
 error = (m, idx) ->
   console.log(m.input.lst[0..idx] + "<<^^^ ".red + m.input.lst[idx+1..])
